@@ -1,0 +1,98 @@
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam, ChatCompletionMessageToolCall } from "openai/resources/chat/completions";
+import { env } from "../env.js";
+import { toolSchemas, dispatchTool } from "../tools/index.js";
+
+const client = new OpenAI({
+  baseURL: env.OPENAI_BASE_URL,
+  apiKey: env.OPENAI_API_KEY,
+});
+
+const MAX_TOOL_ITERATIONS = 5;
+
+export type StreamEvent =
+  | { type: "text"; delta: string }
+  | { type: "tool_call"; name: string; args: string }
+  | { type: "tool_result"; name: string; result: string }
+  | { type: "done"; messages: ChatCompletionMessageParam[] }
+  | { type: "error"; message: string };
+
+export async function* runChat(
+  history: ChatCompletionMessageParam[]
+): AsyncGenerator<StreamEvent> {
+  const messages = [...history];
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const stream = await client.chat.completions.create({
+      model: env.MODEL,
+      messages,
+      tools: toolSchemas,
+      stream: true,
+    });
+
+    let assistantContent = "";
+    const toolCallAcc: Record<number, { id: string; name: string; args: string }> = {};
+    let finishReason: string | null = null;
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) continue;
+      const delta = choice.delta;
+
+      if (delta.content) {
+        assistantContent += delta.content;
+        yield { type: "text", delta: delta.content };
+      }
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index;
+          if (!toolCallAcc[idx]) toolCallAcc[idx] = { id: "", name: "", args: "" };
+          if (tc.id) toolCallAcc[idx].id = tc.id;
+          if (tc.function?.name) toolCallAcc[idx].name = tc.function.name;
+          if (tc.function?.arguments) toolCallAcc[idx].args += tc.function.arguments;
+        }
+      }
+
+      if (choice.finish_reason) finishReason = choice.finish_reason;
+    }
+
+    const toolCalls = Object.values(toolCallAcc);
+
+    if (toolCalls.length === 0) {
+      messages.push({ role: "assistant", content: assistantContent });
+      yield { type: "done", messages };
+      return;
+    }
+
+    const assistantMsg: ChatCompletionMessageParam = {
+      role: "assistant",
+      content: assistantContent || null,
+      tool_calls: toolCalls.map<ChatCompletionMessageToolCall>((c) => ({
+        id: c.id,
+        type: "function",
+        function: { name: c.name, arguments: c.args },
+      })),
+    };
+    messages.push(assistantMsg);
+
+    for (const tc of toolCalls) {
+      yield { type: "tool_call", name: tc.name, args: tc.args };
+      const result = await dispatchTool(tc.name, tc.args);
+      yield { type: "tool_result", name: tc.name, result };
+      messages.push({
+        role: "tool",
+        tool_call_id: tc.id,
+        content: result,
+      });
+    }
+
+    if (finishReason !== "tool_calls") {
+      // model stopped for another reason after emitting tool calls — bail
+      yield { type: "done", messages };
+      return;
+    }
+  }
+
+  yield { type: "error", message: `exceeded ${MAX_TOOL_ITERATIONS} tool iterations` };
+}
