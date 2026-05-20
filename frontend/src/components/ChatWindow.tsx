@@ -9,7 +9,15 @@ type Msg =
   | { role: "user" | "assistant"; content: string }
   | { role: "tool"; name: string; content: string };
 
-type AppItem = { id: string; title: string; createdAt: string; appName?: string | null };
+type AppItem = { id: string; title: string; createdAt: string };
+
+function unwrapUserPayload(content: string): string {
+  const m1 = content.match(/^My .+? is "([\s\S]*)"\.$/);
+  if (m1) return m1[1];
+  const m2 = content.match(/^Answer to ".+?": ([\s\S]*)$/);
+  if (m2) return m2[1];
+  return content;
+}
 
 const INITIAL_GREETING: Msg = {
   role: "assistant",
@@ -264,9 +272,9 @@ export default function ChatWindow() {
                     <button
                       onClick={() => loadChat(a.id)}
                       className="app-row-button"
-                      title={a.appName || a.title}
+                      title={unwrapUserPayload(a.title)}
                     >
-                      {a.appName || a.title || "Untitled"}
+                      {unwrapUserPayload(a.title) || "Untitled"}
                     </button>
                     <button
                       onClick={() => deleteApp(a.id)}
