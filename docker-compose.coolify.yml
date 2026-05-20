@@ -35,7 +35,9 @@ services:
     command: sh -c "npm run db:push && npx tsx src/server.ts"
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: prod
     container_name: frontend
     depends_on:
       - backend
