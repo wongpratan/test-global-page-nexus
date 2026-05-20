@@ -328,7 +328,7 @@ export default function ChatWindow() {
             <button onClick={() => setSidebarOpen((v) => !v)} title="Toggle applications" className="btn-icon">
               <Menu size={16} strokeWidth={2} />
             </button>
-            <strong>Global Page Nexus</strong>
+            <strong>Vibe Deployment</strong>
           </div>
           <button onClick={logout} title="Logout" className="btn-icon">
             <LogOut size={16} strokeWidth={2} />
