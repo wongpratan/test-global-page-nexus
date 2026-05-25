@@ -1,36 +1,39 @@
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionMessageToolCall } from "openai/resources/chat/completions";
 import { env } from "../env.js";
-import { toolSchemas, dispatchTool } from "../tools/index.js";
+import { getToolsForAgent } from "../tools/index.js";
 import type { ToolContext } from "../tools/deployment.js";
-import type { InputRequestParams } from "./inputRequest.js";
+import type { InputRequestParams, EnvVarSpec } from "./inputRequest.js";
+import type { AgentId } from "./prompts.js";
 
 const client = new OpenAI({
   baseURL: env.OPENAI_BASE_URL,
   apiKey: env.OPENAI_API_KEY,
 });
 
-const MAX_TOOL_ITERATIONS = 5;
+const MAX_TOOL_ITERATIONS = 20;
 
 export type StreamEvent =
   | { type: "text"; delta: string }
   | { type: "tool_call"; name: string; args: string }
   | { type: "tool_result"; name: string; result: string }
-  | { type: "input_request"; inputType: string; label: string; fieldName?: string; placeholder?: string; options?: string[]; required?: boolean; toolCallId: string }
+  | { type: "input_request"; inputType: string; label: string; fieldName?: string; placeholder?: string; defaultValue?: string; options?: string[]; required?: boolean; envVarSpec?: EnvVarSpec[]; toolCallId: string }
   | { type: "done"; messages: ChatCompletionMessageParam[] }
   | { type: "error"; message: string };
 
 export async function* runChat(
   history: ChatCompletionMessageParam[],
-  ctx: ToolContext
+  ctx: ToolContext,
+  agentId: AgentId,
 ): AsyncGenerator<StreamEvent> {
   const messages = [...history];
+  const { schemas, dispatch } = await getToolsForAgent(agentId);
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const stream = await client.chat.completions.create({
       model: env.MODEL,
       messages,
-      tools: toolSchemas,
+      tools: schemas,
       stream: true,
     });
 
@@ -94,15 +97,17 @@ export async function* runChat(
           label: params.label,
           fieldName: params.fieldName,
           placeholder: params.placeholder,
+          defaultValue: params.defaultValue,
           options: params.options,
           required: params.required,
+          envVarSpec: params.envVarSpec,
           toolCallId: tc.id,
         };
         yield { type: "done", messages };
         return;
       }
       yield { type: "tool_call", name: tc.name, args: tc.args };
-      const result = await dispatchTool(tc.name, tc.args, ctx);
+      const result = await dispatch(tc.name, tc.args, ctx);
       yield { type: "tool_result", name: tc.name, result };
       messages.push({
         role: "tool",

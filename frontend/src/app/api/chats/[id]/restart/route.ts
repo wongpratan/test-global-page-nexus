@@ -4,14 +4,13 @@ import { BACKEND_URL, AUTH_COOKIE } from "@/lib/backend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const token = req.cookies.get(AUTH_COOKIE)?.value;
   if (!token) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
-  const agentId = req.nextUrl.searchParams.get("agentId");
-  const qs = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
-  const upstream = await fetch(`${BACKEND_URL}/chats/${encodeURIComponent(id)}/messages${qs}`, {
+  const upstream = await fetch(`${BACKEND_URL}/chats/${encodeURIComponent(id)}/restart`, {
+    method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
   const text = await upstream.text();
