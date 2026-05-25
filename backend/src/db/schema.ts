@@ -40,6 +40,8 @@ export const reviewResults = pgTable("review_results", {
   summary: text("summary"),
   nameGuess: text("name_guess"),
   envVarsDetected: jsonb("env_vars_detected"),
+  dockerComposeLocation: text("docker_compose_location"),
+  dockerfileLocation: text("dockerfile_location"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

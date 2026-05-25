@@ -57,6 +57,16 @@ export const saveReviewResultTool = {
               },
             },
           },
+          dockerComposeLocation: {
+            type: "string",
+            description:
+              "Repo-root path (leading slash) to the docker-compose file. Pass through verbatim from detect_build_pack.composePath when buildPack='dockercompose'.",
+          },
+          dockerfileLocation: {
+            type: "string",
+            description:
+              "Repo-root path (leading slash) to the Dockerfile. Pass through verbatim from detect_build_pack.dockerfilePath when buildPack='dockerfile'.",
+          },
         },
       },
     },
@@ -75,6 +85,8 @@ export const saveReviewResultTool = {
         summary: args.summary ?? null,
         nameGuess: args.nameGuess ?? null,
         envVarsDetected: args.envVarsDetected ?? null,
+        dockerComposeLocation: args.dockerComposeLocation ?? null,
+        dockerfileLocation: args.dockerfileLocation ?? null,
       })
       .returning();
     return JSON.stringify({

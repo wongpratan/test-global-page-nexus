@@ -447,6 +447,13 @@ export const cloneAndInspectRepoTool = {
       const lockfiles = LOCKFILES.filter((n) => rootEntries.some((e) => !e.isDir && e.name === n));
       const secretsFound = findSecrets(rootEntries);
 
+      const composeCandidates = rootEntries
+        .filter((e) => !e.isDir && /^(docker-compose|compose)([.-].+)?\.ya?ml$/i.test(e.name))
+        .map((e) => `/${e.name}`);
+      const dockerfileCandidates = rootEntries
+        .filter((e) => !e.isDir && /^Dockerfile([.-].+)?$/.test(e.name))
+        .map((e) => `/${e.name}`);
+
       const envVarsDetected = await scanEnvVars(dir);
       const nameGuess = guessAppName(files, v.url.toString());
 
@@ -459,6 +466,8 @@ export const cloneAndInspectRepoTool = {
         secretsFound,
         nameGuess,
         envVarsDetected,
+        composeCandidates,
+        dockerfileCandidates,
         sizeBytes: walked.bytes,
         fileCount: walked.files,
       });

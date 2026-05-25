@@ -71,7 +71,12 @@ function detectPythonReady(rootEntries: string[]): { ready: boolean; notes: stri
   return { ready: false, notes };
 }
 
-export function detect(rootEntries: string[], packageJson?: string) {
+export function detect(
+  rootEntries: string[],
+  packageJson?: string,
+  composeCandidates?: string[],
+  dockerfileCandidates?: string[],
+) {
   const entries = new Set(rootEntries);
   const secretsFound = scanSecrets(rootEntries);
   const notes: string[] = [];
@@ -79,15 +84,29 @@ export function detect(rootEntries: string[], packageJson?: string) {
   let runtime: Runtime = null;
   let matchedRule = "no rule matched";
   let ready = false;
+  let composePath: string | undefined;
+  let dockerfilePath: string | undefined;
 
-  const compose = COMPOSE_FILES.find((f) => entries.has(f));
-  if (compose) {
+  const composeList =
+    Array.isArray(composeCandidates) && composeCandidates.length > 0
+      ? composeCandidates
+      : COMPOSE_FILES.filter((f) => entries.has(f)).map((f) => `/${f}`);
+  const dockerfileList =
+    Array.isArray(dockerfileCandidates) && dockerfileCandidates.length > 0
+      ? dockerfileCandidates
+      : entries.has("Dockerfile")
+        ? ["/Dockerfile"]
+        : [];
+
+  if (composeList.length > 0) {
     buildPack = "dockercompose";
-    matchedRule = `root ${compose} present`;
+    matchedRule = `${composeList.length} compose file(s) at repo root`;
+    if (composeList.length === 1) composePath = composeList[0];
     ready = true;
-  } else if (entries.has("Dockerfile")) {
+  } else if (dockerfileList.length > 0) {
     buildPack = "dockerfile";
-    matchedRule = "root Dockerfile present, no compose";
+    matchedRule = `${dockerfileList.length} Dockerfile(s) at repo root, no compose`;
+    if (dockerfileList.length === 1) dockerfilePath = dockerfileList[0];
     ready = true;
   } else if (entries.has("package.json")) {
     buildPack = "nixpacks";
@@ -149,7 +168,18 @@ export function detect(rootEntries: string[], packageJson?: string) {
     notes.push(`committed secrets force ready=false: ${secretsFound.join(", ")}`);
   }
 
-  return { buildPack, runtime, matchedRule, ready, secretsFound, notes };
+  return {
+    buildPack,
+    runtime,
+    matchedRule,
+    ready,
+    secretsFound,
+    notes,
+    composePath,
+    dockerfilePath,
+    composeCandidates: composeList,
+    dockerfileCandidates: dockerfileList,
+  };
 }
 
 export const detectBuildPackTool = {
@@ -158,7 +188,7 @@ export const detectBuildPackTool = {
     function: {
       name: "detect_build_pack",
       description:
-        "Deterministically detect the Coolify build pack and scan for committed secrets from a repo's root file listing. Call after `clone_and_inspect_repo`. Pass `rootEntries` from the clone tool, and pass `packageJson` (the raw contents from `files`) when `package.json` is present so node readiness can be verified. Returns the build pack, runtime, the rule that matched, readiness, any secrets found, and notes. Priority: dockercompose > dockerfile > nixpacks > static > unknown.",
+        "Deterministically detect the Coolify build pack and scan for committed secrets from a repo's root file listing. Call after `clone_and_inspect_repo`. Pass `rootEntries` from the clone tool, `packageJson` when `package.json` is present, and `composeCandidates` / `dockerfileCandidates` from the clone tool so variants (e.g. docker-compose.prod.yml, Dockerfile.dev) are considered. Returns the build pack, runtime, the rule that matched, readiness, secrets, notes, `composeCandidates`, `dockerfileCandidates`, and (when exactly ONE candidate exists for the chosen pack) `composePath` / `dockerfilePath`. When more than one candidate exists, the corresponding `*Path` is omitted and the Reviewer must prompt the user to pick. Priority: dockercompose > dockerfile > nixpacks > static > unknown.",
       parameters: {
         type: "object",
         required: ["rootEntries"],
@@ -172,6 +202,16 @@ export const detectBuildPackTool = {
             type: "string",
             description: "Raw package.json contents (from clone_and_inspect_repo.files['package.json']). Required to determine node readiness.",
           },
+          composeCandidates: {
+            type: "array",
+            items: { type: "string" },
+            description: "Leading-slash repo-root paths of compose files, verbatim from clone_and_inspect_repo.composeCandidates.",
+          },
+          dockerfileCandidates: {
+            type: "array",
+            items: { type: "string" },
+            description: "Leading-slash repo-root paths of Dockerfiles, verbatim from clone_and_inspect_repo.dockerfileCandidates.",
+          },
         },
       },
     },
@@ -179,7 +219,13 @@ export const detectBuildPackTool = {
   execute: async (args: any, _ctx: ToolContext): Promise<string> => {
     const rootEntries: string[] = Array.isArray(args?.rootEntries) ? args.rootEntries : [];
     const packageJson: string | undefined = typeof args?.packageJson === "string" ? args.packageJson : undefined;
-    const result = detect(rootEntries, packageJson);
+    const composeCandidates: string[] | undefined = Array.isArray(args?.composeCandidates)
+      ? args.composeCandidates.filter((s: unknown): s is string => typeof s === "string")
+      : undefined;
+    const dockerfileCandidates: string[] | undefined = Array.isArray(args?.dockerfileCandidates)
+      ? args.dockerfileCandidates.filter((s: unknown): s is string => typeof s === "string")
+      : undefined;
+    const result = detect(rootEntries, packageJson, composeCandidates, dockerfileCandidates);
     return JSON.stringify(result);
   },
 };

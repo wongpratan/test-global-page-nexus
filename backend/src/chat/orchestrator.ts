@@ -130,6 +130,12 @@ export function makeChatService(deps: Deps): ChatService {
           const lines = ["Coordinator context (requirements collected for this chat):"];
           if (deployerReview?.buildPack) lines.push(`buildPack: ${deployerReview.buildPack}`);
           if (deployerReview?.repoUrl) lines.push(`repoUrl: ${deployerReview.repoUrl}`);
+          if (deployerReview?.buildPack === "dockercompose" && deployerReview.dockerComposeLocation) {
+            lines.push(`dockerComposeLocation: ${deployerReview.dockerComposeLocation}`);
+          }
+          if (deployerReview?.buildPack === "dockerfile" && deployerReview.dockerfileLocation) {
+            lines.push(`dockerfileLocation: ${deployerReview.dockerfileLocation}`);
+          }
           lines.push(`appName: ${coords.appName}`);
           lines.push(`envVarKeys: ${JSON.stringify(envVarKeys)}`);
           if (env.COOLIFY_APPS_DOMAIN) {
