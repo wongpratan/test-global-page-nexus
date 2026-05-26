@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import fastifyCookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import { env } from "./env.js";
 import { authRoutes } from "./auth/routes.js";
@@ -15,6 +16,7 @@ await app.register(cors, {
 
 app.get("/health", async () => ({ ok: true }));
 
+await app.register(fastifyCookie);
 await app.register(authRoutes);
 await app.register(chatRoutes);
 

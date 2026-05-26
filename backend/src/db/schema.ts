@@ -1,9 +1,12 @@
-import { pgTable, uuid, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgEnum, pgTable, uuid, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 
+export const userTypeEnum = pgEnum("user_type", ["default", "google"]);
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
+  type: userTypeEnum("type").default("default").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash"),
+  providerId: text("provider_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
