@@ -29,6 +29,13 @@ export interface AuthService {
 export function makeAuthService(deps: { users: UserRepository }): AuthService {
   const { users } = deps;
   return {
+    async oauth(email, providerId, type) {
+      let user = await users.findByEmail(email);
+      if (!user)
+        user = await users.create({ email, providerId, type});
+      const token = sign({ sub: user.id, email: user.email });
+      return { token, user: { id: user.id, email: user.email } };
+    },
     async register(email, password) {
       const existing = await users.findByEmail(email);
       if (existing) throw new EmailTakenError();
